@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>참여자의 책 — 도시 산책자의 N페이지</title>
+<link rel="icon" href="assets/icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400;700&amp;display=swap">
+<style>
+@font-face{font-family:'Chai Hwaljjak';src:url(assets/fonts/ChaiHwaljjak-Bold.otf) format('opentype');font-weight:700;font-display:swap}
+@font-face{font-family:'SimKyungha';src:url(assets/fonts/SimKyungha.ttf) format('truetype');font-weight:400;font-display:swap}
+body{margin:0;background:#ffffff}
+a{color:#6b6c66;text-decoration:none}a:hover{color:#151613}
+.pg{background:none;border:none;font:inherit;color:#6b6c66;cursor:pointer;padding:12px 0;min-height:44px}
+.pg:hover,.pg:focus-visible{color:#151613;text-decoration:underline;text-underline-offset:4px}
+</style>
+<style>
+body{word-break:keep-all}
+@media (max-width:640px){
+  h1{font-size:30px !important;line-height:1.2 !important}
+  main > div:has(> div > button.win){gap:8px !important;width:100%}
+  main > div:has(> div > button.win) > span:last-child{display:none}
+  div:has(> button.win){gap:5px !important;flex:1;min-width:0}
+  button.win{width:auto !important;flex:1;min-width:0;height:56px !important}
+  footer p{font-size:22px !important}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+
+class DCLogic {
+  constructor(p){ this.props = p || {}; this.state = {}; }
+  setState(s){ let ch=false; for (const k in s){ if (this.state[k] !== s[k]) ch=true; } Object.assign(this.state, s); if (ch && this.__mount) this.__mount(); }
+  forceUpdate(){ if (this.__mount) this.__mount(); }
+}
+function __render(tplHtml, vals) {
+  const tpl = document.createElement('template'); tpl.innerHTML = tplHtml;
+  const look = (p, scope) => {
+    p = p.trim(); if (p === 'true') return true; if (p === 'false') return false;
+    const segs = p.split('.'); let v = (segs[0] in scope) ? scope[segs[0]] : vals[segs[0]];
+    for (const s of segs.slice(1)) v = v == null ? undefined : v[s]; return v;
+  };
+  const interp = (str, scope) => str.replace(/\{\{([^}]+)\}\}/g, (_, p) => { const v = look(p, scope); return v == null ? '' : String(v); });
+  const walk = (node, scope, out) => {
+    for (const n of Array.from(node.childNodes)) {
+      if (n.nodeType === 3) { out.appendChild(document.createTextNode(interp(n.textContent, scope))); continue; }
+      if (n.nodeType !== 1) continue;
+      const tag = n.tagName.toLowerCase();
+      if (tag === 'sc-for') {
+        const list = look(n.getAttribute('list').replace(/[{}]/g, ''), scope) || []; const as = n.getAttribute('as');
+        list.forEach((it, i) => walk(n.content || n, Object.assign({}, scope, { [as]: it, $index: i }), out)); continue;
+      }
+      if (tag === 'sc-if') { if (look(n.getAttribute('value').replace(/[{}]/g, ''), scope)) walk(n, scope, out); continue; }
+      const el = n.cloneNode(false);
+      for (const a of Array.from(n.attributes)) {
+        if (!a.value.includes('{{')) continue;
+        const whole = a.value.match(/^\{\{([^}]+)\}\}$/);
+        if (a.name.startsWith('on')) {
+          el.removeAttribute(a.name);
+          const fn = whole ? look(whole[1], scope) : null;
+          if (typeof fn === 'function') el.addEventListener(a.name.slice(2).toLowerCase(), fn);
+          continue;
+        }
+        if (whole) { const v = look(whole[1], scope); if (v === false || v == null) { el.removeAttribute(a.name); continue; } if (v === true) { el.setAttribute(a.name, ''); continue; } }
+        el.setAttribute(a.name, interp(a.value, scope));
+      }
+      walk(n, scope, el); out.appendChild(el);
+    }
+  };
+  const frag = document.createDocumentFragment(); walk(tpl.content, {}, frag); return frag;
+}
+function __pathOf(el, root){ const p=[]; while (el && el !== root){ const par=el.parentNode; if(!par) return null; p.unshift(Array.prototype.indexOf.call(par.children, el)); el=par; } return el===root ? p : null; }
+function __at(root, p){ let el=root; for (const i of p){ el = el && el.children[i]; } return el; }
+
+
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { i: 2 }; }
+  renderVals() {
+    const N = 10;
+    const pad = (n) => String(n).padStart(2, '0');
+    const greys = ['#e4e1da', '#d9d7d1', '#cfccc4', '#c4c1b9', '#b9b6ae', '#aeaba3', '#a3a098', '#98958d', '#8d8a82', '#827f77'];
+    const i = this.state.i;
+    const go = (j) => () => {
+      this.setState({ i: j });
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
+    };
+    const hide = 'visibility: hidden;';
+    return {
+      num: pad(i + 1),
+      swatch: greys[i],
+      prevNum: pad(Math.max(1, i)),
+      nextNum: pad(Math.min(N, i + 2)),
+      atStart: i === 0,
+      atEnd: i === N - 1,
+      prevStyle: i === 0 ? hide : '',
+      nextStyle: i === N - 1 ? hide : '',
+      goPrev: go(Math.max(0, i - 1)),
+      goNext: go(Math.min(N - 1, i + 1))
+    };
+  }
+}
+
+const TPL = "\n\n<div style=\"min-height: 1800px; box-sizing: border-box; background: #ffffff; color: #151613; font-family: 'Noto Sans KR', 'Noto Sans CJK KR', system-ui, sans-serif; padding: 24px 40px 64px; display: flex; flex-direction: column; gap: 56px;\">\n  <header style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px;\">\n    <div style=\"display: flex; flex-direction: column; gap: 4px;\">\n      <a href=\"./\" style=\"font-family: 'Chai Hwaljjak', 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif; font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -0.5px; color: #151613;\">도시 산책자의 N페이지</a>\n      <p style=\"margin: 0; font-size: 13px; line-height: 18px; font-weight: 500; color: #6b6c66;\">원주에서 문장 좀 줍겠습니다 · 2026. 11. 14.</p>\n    </div>\n    <nav aria-label=\"아카이브\" style=\"display: flex; flex-wrap: wrap; gap: 24px; font-size: 13px; font-weight: 500; padding-top: 10px;\">\n      <a href=\"./\">홈</a>\n      <a href=\"shelf.html\">책장</a>\n      <a href=\"lines.html\">선</a>\n      <a href=\"colors.html\">색</a>\n      <a href=\"sound.html\">소리</a>\n      <a href=\"texts.html\">글</a>\n    </nav>\n  </header>\n\n  <div style=\"display: flex; flex-direction: column; gap: 8px; max-width: 1120px; width: 100%; margin: 0 auto;\">\n    <a href=\"shelf.html\" style=\"font-size: 13px; font-weight: 500; padding: 8px 0;\">← 책장으로</a>\n    <p style=\"margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.2px; color: #6b6c66;\">참여자 {{num}} · [참여자 이름]</p>\n    <h1 style=\"margin: 0; font-family: 'Noto Serif KR', 'Noto Serif CJK KR', serif; font-size: 48px; line-height: 1.2; font-weight: 400; letter-spacing: -1px; color: #6b6c66;\">[처음 적은 단어]</h1>\n  </div>\n\n  <section aria-labelledby=\"h-line\" style=\"display: flex; flex-wrap: wrap; gap: 32px 48px; max-width: 1120px; width: 100%; margin: 0 auto; padding-top: 32px; border-top: 1px solid #e2e0da;\">\n    <div style=\"flex: 0 0 160px; display: flex; flex-direction: column; gap: 4px;\">\n      <h2 id=\"h-line\" style=\"margin: 0; font-family: 'Chai Hwaljjak', 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif; font-size: 28px; line-height: 1.3; font-weight: 700;\">선</h2>\n      <span style=\"font-size: 13px; line-height: 18px; color: #6b6c66;\">직유 · [참여자 이름]</span>\n    </div>\n    <div style=\"flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 20px;\">\n      <div style=\"aspect-ratio: 4 / 3; max-width: 640px; background: #f1efea; border: 1px solid #e2e0da; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; box-sizing: border-box; font-size: 13px; line-height: 18px; color: #6b6c66;\">[선 페이지 스캔 — 사진 틀 안의 선을 바깥으로 이어 그린 페이지]</div>\n      <p style=\"margin: 0; font-family: 'SimKyungha', 'Noto Serif KR', 'Noto Serif CJK KR', serif; font-size: 26px; line-height: 1.5; color: #6b6c66;\">[~를 닮은 선 — 직유 문장]</p>\n      <p style=\"margin: 0; font-size: 12px; line-height: 16px; color: #6b6c66;\">담당 작가: 민예원</p>\n    </div>\n  </section>\n\n  <section aria-labelledby=\"h-color\" style=\"display: flex; flex-wrap: wrap; gap: 32px 48px; max-width: 1120px; width: 100%; margin: 0 auto; padding-top: 32px; border-top: 1px solid #e2e0da;\">\n    <div style=\"flex: 0 0 160px; display: flex; flex-direction: column; gap: 4px;\">\n      <h2 id=\"h-color\" style=\"margin: 0; font-family: 'Chai Hwaljjak', 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif; font-size: 28px; line-height: 1.3; font-weight: 700;\">색</h2>\n      <span style=\"font-size: 13px; line-height: 18px; color: #6b6c66;\">은유 · [참여자 이름]</span>\n    </div>\n    <div style=\"flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 20px;\">\n      <div style=\"display: flex; flex-wrap: wrap; gap: 24px;\">\n        <div style=\"flex: 0 0 200px; display: flex; flex-direction: column; gap: 8px;\">\n          <div style=\"height: 200px; background: {{swatch}}; border: 1px solid #e2e0da;\"></div>\n          <span style=\"font-family: 'Noto Serif KR', 'Noto Serif CJK KR', serif; font-size: 18px; line-height: 1.4; color: #6b6c66;\">[색 이름]</span>\n        </div>\n        <div style=\"flex: 1 1 320px; display: flex; flex-direction: column; gap: 20px;\">\n          <div style=\"aspect-ratio: 4 / 3; background: #f1efea; border: 1px solid #e2e0da; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; box-sizing: border-box; font-size: 13px; line-height: 18px; color: #6b6c66;\">[색 페이지 사진 — 수채화·오일파스텔로 만든 색]</div>\n          <p style=\"margin: 0; font-family: 'SimKyungha', 'Noto Serif KR', 'Noto Serif CJK KR', serif; font-size: 26px; line-height: 1.5; color: #6b6c66;\">[이 색은 ~이다 — 은유 문장]</p>\n        </div>\n      </div>\n      <p style=\"margin: 0; font-size: 12px; line-height: 16px; color: #6b6c66;\">담당 작가: 조순호</p>\n    </div>\n  </section>\n\n  <section aria-labelledby=\"h-sound\" style=\"display: flex; flex-wrap: wrap; gap: 32px 48px; max-width: 1120px; width: 100%; margin: 0 auto; padding-top: 32px; border-top: 1px solid #e2e0da;\">\n    <div style=\"flex: 0 0 160px; display: flex; flex-direction: column; gap: 4px;\">\n      <h2 id=\"h-sound\" style=\"margin: 0; font-family: 'Chai Hwaljjak', 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif; font-size: 28px; line-height: 1.3; font-weight: 700;\">소리</h2>\n      <span style=\"font-size: 13px; line-height: 18px; color: #6b6c66;\">서사 · [참여자 이름]</span>\n    </div>\n    <div style=\"flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 24px;\">\n      <div style=\"display: flex; align-items: center; gap: 20px; flex-wrap: wrap;\">\n        <button type=\"button\" aria-label=\"1분 녹음 듣기\" style=\"width: 56px; height: 56px; border-radius: 50%; border: none; background: #151613; color: #ffffff; font-size: 16px; cursor: pointer; flex-shrink: 0;\">▶</button>\n        <div style=\"flex: 1 1 360px; display: flex; flex-direction: column; gap: 8px;\">\n          <div style=\"display: flex; height: 12px; gap: 3px;\">\n            <span style=\"flex: 22; background: #4d6987;\"></span>\n            <span style=\"flex: 18; background: #b5501f;\"></span>\n            <span style=\"flex: 20; background: #76629a;\"></span>\n          </div>\n          <div style=\"display: flex; justify-content: space-between; font-size: 13px; line-height: 18px; font-weight: 500; color: #6b6c66;\">\n            <span>[녹음한 장소 한 줄]</span>\n            <span>1:00</span>\n          </div>\n        </div>\n      </div>\n      <div style=\"display: flex; flex-direction: column; gap: 16px;\">\n        <p style=\"margin: 0; font-family: 'SimKyungha', 'Noto Serif KR', 'Noto Serif CJK KR', serif; font-size: 26px; line-height: 1.5; color: #6b6c66;\"><span style=\"font-family: 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.2px; color: #4d6987; margin-right: 16px; vertical-align: middle;\">등장</span>[등장 문장]</p>\n        <p style=\"margin: 0; font-family: 'SimKyungha', 'Noto Serif KR', 'Noto Serif CJK KR', serif; font-size: 26px; line-height: 1.5; color: #6b6c66;\"><span style=\"font-family: 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.2px; color: #b5501f; margin-right: 16px; vertical-align: middle;\">사건</span>[사건 문장]</p>\n        <p style=\"margin: 0; font-family: 'SimKyungha', 'Noto Serif KR', 'Noto Serif CJK KR', serif; font-size: 26px; line-height: 1.5; color: #6b6c66;\"><span style=\"font-family: 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.2px; color: #76629a; margin-right: 16px; vertical-align: middle;\">여운</span>[여운 문장]</p>\n      </div>\n      <p style=\"margin: 0; font-size: 12px; line-height: 16px; color: #6b6c66;\">담당 작가: 김수진</p>\n    </div>\n  </section>\n\n  <section aria-labelledby=\"h-text\" style=\"display: flex; flex-wrap: wrap; gap: 32px 48px; max-width: 1120px; width: 100%; margin: 0 auto; padding-top: 32px; border-top: 1px solid #e2e0da;\">\n    <div style=\"flex: 0 0 160px; display: flex; flex-direction: column; gap: 4px;\">\n      <h2 id=\"h-text\" style=\"margin: 0; font-family: 'Chai Hwaljjak', 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif; font-size: 28px; line-height: 1.3; font-weight: 700;\">글</h2>\n      <span style=\"font-size: 13px; line-height: 18px; color: #6b6c66;\">모아 쓰기 · [참여자 이름]</span>\n    </div>\n    <div style=\"flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 20px;\">\n      <p style=\"margin: 0; max-width: 640px; font-family: 'SimKyungha', 'Noto Serif KR', 'Noto Serif CJK KR', serif; font-size: 26px; line-height: 1.8; color: #6b6c66;\">[마지막 글 — 앞에 쓴 문장 중 가장 마음에 드는 문장을 첫 줄로 두고, 선 · 색 · 소리에서 주운 문장을 모아 쓴 짧은 글]</p>\n      <p style=\"margin: 0; font-size: 12px; line-height: 16px; color: #6b6c66;\">담당 작가: 이성미</p>\n    </div>\n  </section>\n\n  <nav aria-label=\"다른 책\" style=\"display: flex; justify-content: space-between; align-items: center; max-width: 1120px; width: 100%; margin: 0 auto; padding-top: 24px; border-top: 1px solid #e2e0da; font-size: 13px; font-weight: 500;\">\n    <button class=\"pg\" type=\"button\" disabled=\"{{atStart}}\" onClick=\"{{goPrev}}\" style=\"{{prevStyle}}\">← 참여자 {{prevNum}}</button>\n    <span aria-live=\"polite\" style=\"font-size: 12px; line-height: 16px; letter-spacing: 0.4px; color: #6b6c66;\">{{num}} / 10</span>\n    <button class=\"pg\" type=\"button\" disabled=\"{{atEnd}}\" onClick=\"{{goNext}}\" style=\"{{nextStyle}}\">참여자 {{nextNum}} →</button>\n  </nav>\n</div>\n";
+const c = new Component({});
+const __m = location.hash.match(/^#(\d{1,2})$/); if (__m) c.state.i = Math.max(0, Math.min(9, parseInt(__m[1], 10) - 1));
+const root = document.getElementById('root');
+c.__mount = () => {
+  const vals = c.renderVals();
+  const ae = document.activeElement; const fp = (ae && root.contains(ae)) ? __pathOf(ae, root) : null;
+  root.replaceChildren(__render(TPL, vals));
+  if (fp) { const t = __at(root, fp); if (t && t.focus) t.focus({ preventScroll: true }); }
+  if (location.pathname.endsWith('book.html')) history.replaceState(null, '', '#' + vals.num);
+};
+c.__mount();
+</script>
+</body>
+</html>

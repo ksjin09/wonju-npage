@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>소리 — 도시 산책자의 N페이지</title>
+<link rel="icon" href="assets/icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400;700&amp;display=swap">
+<style>
+@font-face{font-family:'Chai Hwaljjak';src:url(assets/fonts/ChaiHwaljjak-Bold.otf) format('opentype');font-weight:700;font-display:swap}
+body{margin:0;background:#0e0f12}
+a{color:#8d8f86;text-decoration:none}a:hover{color:#ecebe5}
+.win{border:1px solid transparent;cursor:pointer;padding:0;transition:box-shadow .3s,background .3s}
+.win:hover,.win:focus-visible{border-color:#ecebe5;outline:none}
+.txtbtn{background:none;border:none;color:#ecebe5;font:inherit;cursor:pointer;padding:12px 4px}
+.txtbtn:hover{text-decoration:underline}
+</style>
+<style>
+body{word-break:keep-all}
+@media (max-width:640px){
+  h1{font-size:30px !important;line-height:1.2 !important}
+  main > div:has(> div > button.win){gap:8px !important;width:100%}
+  main > div:has(> div > button.win) > span:last-child{display:none}
+  div:has(> button.win){gap:5px !important;flex:1;min-width:0}
+  button.win{width:auto !important;flex:1;min-width:0;height:56px !important}
+  footer p{font-size:22px !important}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+
+class DCLogic {
+  constructor(p){ this.props = p || {}; this.state = {}; }
+  setState(s){ let ch=false; for (const k in s){ if (this.state[k] !== s[k]) ch=true; } Object.assign(this.state, s); if (ch && this.__mount) this.__mount(); }
+  forceUpdate(){ if (this.__mount) this.__mount(); }
+}
+function __render(tplHtml, vals) {
+  const tpl = document.createElement('template'); tpl.innerHTML = tplHtml;
+  const look = (p, scope) => {
+    p = p.trim(); if (p === 'true') return true; if (p === 'false') return false;
+    const segs = p.split('.'); let v = (segs[0] in scope) ? scope[segs[0]] : vals[segs[0]];
+    for (const s of segs.slice(1)) v = v == null ? undefined : v[s]; return v;
+  };
+  const interp = (str, scope) => str.replace(/\{\{([^}]+)\}\}/g, (_, p) => { const v = look(p, scope); return v == null ? '' : String(v); });
+  const walk = (node, scope, out) => {
+    for (const n of Array.from(node.childNodes)) {
+      if (n.nodeType === 3) { out.appendChild(document.createTextNode(interp(n.textContent, scope))); continue; }
+      if (n.nodeType !== 1) continue;
+      const tag = n.tagName.toLowerCase();
+      if (tag === 'sc-for') {
+        const list = look(n.getAttribute('list').replace(/[{}]/g, ''), scope) || []; const as = n.getAttribute('as');
+        list.forEach((it, i) => walk(n.content || n, Object.assign({}, scope, { [as]: it, $index: i }), out)); continue;
+      }
+      if (tag === 'sc-if') { if (look(n.getAttribute('value').replace(/[{}]/g, ''), scope)) walk(n, scope, out); continue; }
+      const el = n.cloneNode(false);
+      for (const a of Array.from(n.attributes)) {
+        if (!a.value.includes('{{')) continue;
+        const whole = a.value.match(/^\{\{([^}]+)\}\}$/);
+        if (a.name.startsWith('on')) {
+          el.removeAttribute(a.name);
+          const fn = whole ? look(whole[1], scope) : null;
+          if (typeof fn === 'function') el.addEventListener(a.name.slice(2).toLowerCase(), fn);
+          continue;
+        }
+        if (whole) { const v = look(whole[1], scope); if (v === false || v == null) { el.removeAttribute(a.name); continue; } if (v === true) { el.setAttribute(a.name, ''); continue; } }
+        el.setAttribute(a.name, interp(a.value, scope));
+      }
+      walk(n, scope, el); out.appendChild(el);
+    }
+  };
+  const frag = document.createDocumentFragment(); walk(tpl.content, {}, frag); return frag;
+}
+function __pathOf(el, root){ const p=[]; while (el && el !== root){ const par=el.parentNode; if(!par) return null; p.unshift(Array.prototype.indexOf.call(par.children, el)); el=par; } return el===root ? p : null; }
+function __at(root, p){ let el=root; for (const i of p){ el = el && el.children[i]; } return el; }
+
+
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { sel: [0, 6, 9], focus: 1, playing: false }; }
+  renderVals() {
+    const ROLES = [
+      { name: '등장', color: '#8fb0d6', glow: '0 0 22px #8fb0d6, 0 0 60px #8fb0d655',
+        lines: {} },
+      { name: '사건', color: '#ff9a5c', glow: '0 0 22px #ff9a5c, 0 0 60px #ff9a5c55',
+        lines: {} },
+      { name: '여운', color: '#c2aee6', glow: '0 0 22px #c2aee6, 0 0 60px #c2aee655',
+        lines: {} }
+    ];
+    const { sel, focus, playing } = this.state;
+    const pad = (n) => String(n).padStart(2, '0');
+    const lineOf = (r, i) => ROLES[r].lines[i + 1] || ('[참여자 ' + pad(i + 1) + '의 ' + ROLES[r].name + ' 문장]');
+    const rows = ROLES.map((R, r) => ({
+      name: R.name, color: R.color,
+      items: Array.from({ length: 10 }, (_, i) => {
+        const on = sel[r] === i;
+        return {
+          on: on ? 'true' : 'false',
+          label: R.name + ' · 참여자 ' + pad(i + 1),
+          style: 'width: 56px; height: 80px; border-radius: 2px; background: ' + (on ? R.color : '#23262c') + '; box-shadow: ' + (on ? R.glow : 'none') + ';',
+          pick: () => { const s = sel.slice(); s[r] = i; this.setState({ sel: s, focus: r, playing: true }); }
+        };
+      })
+    }));
+    const R = ROLES[focus];
+    return {
+      rows,
+      cur: { tag: R.name + ' · ' + pad(sel[focus] + 1), text: lineOf(focus, sel[focus]), color: R.color },
+      seg0: focus >= 0 ? 1 : 0.25, seg1: focus >= 1 ? 1 : 0.25, seg2: focus >= 2 ? 1 : 0.25,
+      timeText: ['0:06', '0:24', '0:44'][focus] + ' / 0:58',
+      playIcon: playing ? '❚❚' : '▶', playLabel: playing ? '멈춤' : '이어 듣기',
+      togglePlay: () => this.setState({ playing: !playing }),
+      shuffle: () => this.setState({ sel: [0, 1, 2].map(() => Math.floor(Math.random() * 10)), focus: 0, playing: true })
+    };
+  }
+}
+
+const TPL = "\n\n<div style=\"min-height: 900px; box-sizing: border-box; background: #0e0f12; color: #ecebe5; font-family: 'Noto Sans KR', 'Noto Sans CJK KR', system-ui, sans-serif; padding: 24px 40px 40px; display: flex; flex-direction: column; gap: 24px;\">\n  <header style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px;\">\n    <div style=\"display: flex; flex-direction: column; gap: 4px;\">\n      <h1 style=\"margin: 0; font-family: 'Chai Hwaljjak', 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif; font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -0.5px;\"><a href=\"./\" style=\"color: #ecebe5;\">도시 산책자의 N페이지</a></h1>\n      <p style=\"margin: 0; font-size: 13px; line-height: 18px; font-weight: 500; color: #8d8f86;\">원주에서 문장 좀 줍겠습니다 · 2026. 11. 14.</p>\n    </div>\n    <nav aria-label=\"아카이브\" style=\"display: flex; flex-wrap: wrap; gap: 24px; font-size: 13px; font-weight: 500; padding-top: 10px;\">\n      <a href=\"./\">홈</a>\n      <a href=\"shelf.html\">책장</a>\n      <a href=\"lines.html\">선</a>\n      <a href=\"colors.html\">색</a>\n      <a href=\"sound.html\" aria-current=\"page\" style=\"color: #ecebe5; text-decoration: underline; text-underline-offset: 4px;\">소리</a>\n      <a href=\"texts.html\">글</a>\n    </nav>\n  </header>\n\n  <main style=\"flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 40px; padding: 24px 0;\">\n    <p style=\"margin: 0; font-size: 13px; line-height: 18px; color: #8d8f86; text-align: center;\">열 명이 같은 골목에서 1분씩 녹음했습니다. 줄마다 창문 하나에 불을 켜면, 서로 다른 세 사람의 소리가 이야기 하나로 이어집니다.</p>\n    <sc-for list=\"{{rows}}\" as=\"row\" hint-placeholder-count=\"3\">\n      <div style=\"display: flex; align-items: center; gap: 24px;\">\n        <span style=\"width: 40px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.2px; color: {{row.color}};\">{{row.name}}</span>\n        <div style=\"display: flex; gap: 20px;\">\n          <sc-for list=\"{{row.items}}\" as=\"it\" hint-placeholder-count=\"10\">\n            <button class=\"win\" type=\"button\" aria-label=\"{{it.label}}\" aria-pressed=\"{{it.on}}\" onClick=\"{{it.pick}}\" style=\"{{it.style}}\"></button>\n          </sc-for>\n        </div>\n        <span style=\"width: 40px;\"></span>\n      </div>\n    </sc-for>\n  </main>\n\n  <footer style=\"display: flex; flex-direction: column; gap: 16px;\">\n    <p style=\"margin: 0; font-family: 'Noto Serif KR', 'Noto Serif CJK KR', serif; font-size: 28px; line-height: 1.45; letter-spacing: -0.4px; min-height: 41px;\"><span style=\"font-family: 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.2px; margin-right: 16px; vertical-align: middle; color: {{cur.color}};\">{{cur.tag}}</span>{{cur.text}}</p>\n    <div style=\"display: flex; flex-wrap: wrap; align-items: center; gap: 24px;\">\n      <button type=\"button\" aria-label=\"{{playLabel}}\" onClick=\"{{togglePlay}}\" style=\"width: 56px; height: 56px; border-radius: 50%; border: none; background: #ecebe5; color: #0e0f12; font-size: 16px; cursor: pointer; flex-shrink: 0;\">{{playIcon}}</button>\n      <div style=\"flex: 1 1 320px; display: flex; height: 4px; gap: 4px;\">\n        <span style=\"flex: 1; background: #8fb0d6; opacity: {{seg0}};\"></span>\n        <span style=\"flex: 1; background: #ff9a5c; opacity: {{seg1}};\"></span>\n        <span style=\"flex: 1; background: #c2aee6; opacity: {{seg2}};\"></span>\n      </div>\n      <span style=\"font-size: 13px; font-weight: 500; color: #8d8f86;\">{{timeText}}</span>\n      <button class=\"txtbtn\" type=\"button\" onClick=\"{{shuffle}}\" style=\"font-size: 13px; font-weight: 500;\">섞기</button>\n    </div>\n  </footer>\n\n  <nav aria-label=\"이어서 보기\" style=\"display: flex; justify-content: space-between; padding-top: 16px; border-top: 1px solid #2c2e33; font-size: 13px; font-weight: 500;\">\n    <a href=\"colors.html\" style=\"padding: 12px 0;\">← 색</a>\n    <a href=\"texts.html\" style=\"padding: 12px 0;\">글 →</a>\n  </nav>\n</div>\n";
+const c = new Component({});
+
+const root = document.getElementById('root');
+c.__mount = () => {
+  const vals = c.renderVals();
+  const ae = document.activeElement; const fp = (ae && root.contains(ae)) ? __pathOf(ae, root) : null;
+  root.replaceChildren(__render(TPL, vals));
+  if (fp) { const t = __at(root, fp); if (t && t.focus) t.focus({ preventScroll: true }); }
+  
+};
+c.__mount();
+</script>
+</body>
+</html>

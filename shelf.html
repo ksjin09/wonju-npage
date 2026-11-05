@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>책장 — 도시 산책자의 N페이지</title>
+<link rel="icon" href="assets/icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400;700&amp;display=swap">
+<style>
+@font-face{font-family:'Chai Hwaljjak';src:url(assets/fonts/ChaiHwaljjak-Bold.otf) format('opentype');font-weight:700;font-display:swap}
+body{margin:0;background:#ffffff}
+a{color:#6b6c66;text-decoration:none}a:hover{color:#151613}
+.spine{flex-shrink:0;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-decoration:none;transition:transform .22s ease,background .22s ease,color .22s ease}
+.spine:hover,.spine:focus-visible{background:#b5501f !important;color:#ffffff !important;transform:translateY(-14px);outline:none}
+.spine:hover .bar,.spine:focus-visible .bar{background:#ffffff !important}
+.spine:focus-visible{box-shadow:0 0 0 2px #ffffff,0 0 0 4px #151613}
+</style>
+<style>
+body{word-break:keep-all}
+@media (max-width:640px){
+  h1{font-size:30px !important;line-height:1.2 !important}
+  main > div:has(> div > button.win){gap:8px !important;width:100%}
+  main > div:has(> div > button.win) > span:last-child{display:none}
+  div:has(> button.win){gap:5px !important;flex:1;min-width:0}
+  button.win{width:auto !important;flex:1;min-width:0;height:56px !important}
+  footer p{font-size:22px !important}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+
+class DCLogic {
+  constructor(p){ this.props = p || {}; this.state = {}; }
+  setState(s){ let ch=false; for (const k in s){ if (this.state[k] !== s[k]) ch=true; } Object.assign(this.state, s); if (ch && this.__mount) this.__mount(); }
+  forceUpdate(){ if (this.__mount) this.__mount(); }
+}
+function __render(tplHtml, vals) {
+  const tpl = document.createElement('template'); tpl.innerHTML = tplHtml;
+  const look = (p, scope) => {
+    p = p.trim(); if (p === 'true') return true; if (p === 'false') return false;
+    const segs = p.split('.'); let v = (segs[0] in scope) ? scope[segs[0]] : vals[segs[0]];
+    for (const s of segs.slice(1)) v = v == null ? undefined : v[s]; return v;
+  };
+  const interp = (str, scope) => str.replace(/\{\{([^}]+)\}\}/g, (_, p) => { const v = look(p, scope); return v == null ? '' : String(v); });
+  const walk = (node, scope, out) => {
+    for (const n of Array.from(node.childNodes)) {
+      if (n.nodeType === 3) { out.appendChild(document.createTextNode(interp(n.textContent, scope))); continue; }
+      if (n.nodeType !== 1) continue;
+      const tag = n.tagName.toLowerCase();
+      if (tag === 'sc-for') {
+        const list = look(n.getAttribute('list').replace(/[{}]/g, ''), scope) || []; const as = n.getAttribute('as');
+        list.forEach((it, i) => walk(n.content || n, Object.assign({}, scope, { [as]: it, $index: i }), out)); continue;
+      }
+      if (tag === 'sc-if') { if (look(n.getAttribute('value').replace(/[{}]/g, ''), scope)) walk(n, scope, out); continue; }
+      const el = n.cloneNode(false);
+      for (const a of Array.from(n.attributes)) {
+        if (!a.value.includes('{{')) continue;
+        const whole = a.value.match(/^\{\{([^}]+)\}\}$/);
+        if (a.name.startsWith('on')) {
+          el.removeAttribute(a.name);
+          const fn = whole ? look(whole[1], scope) : null;
+          if (typeof fn === 'function') el.addEventListener(a.name.slice(2).toLowerCase(), fn);
+          continue;
+        }
+        if (whole) { const v = look(whole[1], scope); if (v === false || v == null) { el.removeAttribute(a.name); continue; } if (v === true) { el.setAttribute(a.name, ''); continue; } }
+        el.setAttribute(a.name, interp(a.value, scope));
+      }
+      walk(n, scope, el); out.appendChild(el);
+    }
+  };
+  const frag = document.createDocumentFragment(); walk(tpl.content, {}, frag); return frag;
+}
+function __pathOf(el, root){ const p=[]; while (el && el !== root){ const par=el.parentNode; if(!par) return null; p.unshift(Array.prototype.indexOf.call(par.children, el)); el=par; } return el===root ? p : null; }
+function __at(root, p){ let el=root; for (const i of p){ el = el && el.children[i]; } return el; }
+
+
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { hover: null }; }
+  renderVals() {
+    const pad = (n) => String(n).padStart(2, '0');
+    const W = [104, 92, 120, 98, 112, 88, 126, 100, 94, 116];
+    const H = [500, 452, 540, 420, 486, 468, 520, 436, 510, 476];
+    const C = ['#f1efea', '#e4e1da', '#ece9e2', '#d9d7d1', '#f1efea', '#e2ded5', '#d9d7d1', '#ece9e2', '#e4e1da', '#cfccc4'];
+    const loud = (i) => {
+      let s = (i + 1) * 9301 + 49297;
+      const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+      const ev = 8 + Math.floor(rnd() * 14);
+      return Array.from({ length: 30 }, (_, t) => {
+        const base = 0.22 + rnd() * 0.3;
+        const bump = Math.max(0, 1 - Math.abs(t - ev) / 4) * 0.55;
+        return Math.min(1, base + bump);
+      });
+    };
+    const h = this.state.hover;
+    return {
+      books: W.map((w, i) => ({
+        num: pad(i + 1),
+        label: '참여자 ' + pad(i + 1) + '의 책 펼치기',
+        style: 'width: ' + w + 'px; height: ' + H[i] + 'px; padding: 14px 10px 12px; background: ' + C[i] + '; color: #3f403b;',
+        bars: loud(i).map((v) => ({ style: 'display: block; height: 2px; width: ' + Math.round(v * 100) + '%; background: #3f403b;' })),
+        enter: () => this.setState({ hover: i })
+      })),
+      leave: () => this.setState({ hover: null }),
+      caption: h === null ? '책등에 손을 대면 누구의 책인지 보입니다. 누르면 펼쳐집니다.' : '참여자 ' + pad(h + 1) + ' · [처음 적은 단어] — 펼치기 →'
+    };
+  }
+}
+
+const TPL = "\n\n<div style=\"min-height: 1000px; box-sizing: border-box; background: #ffffff; color: #151613; font-family: 'Noto Sans KR', 'Noto Sans CJK KR', system-ui, sans-serif; padding: 24px 40px 64px; display: flex; flex-direction: column; gap: 48px;\">\n  <header style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px;\">\n    <div style=\"display: flex; flex-direction: column; gap: 4px;\">\n      <a href=\"./\" style=\"font-family: 'Chai Hwaljjak', 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif; font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -0.5px; color: #151613;\">도시 산책자의 N페이지</a>\n      <p style=\"margin: 0; font-size: 13px; line-height: 18px; font-weight: 500; color: #6b6c66;\">원주에서 문장 좀 줍겠습니다 · 2026. 11. 14.</p>\n    </div>\n    <nav aria-label=\"아카이브\" style=\"display: flex; flex-wrap: wrap; gap: 24px; font-size: 13px; font-weight: 500; padding-top: 10px;\">\n      <a href=\"./\">홈</a>\n      <a href=\"shelf.html\" aria-current=\"page\" style=\"color: #151613; text-decoration: underline; text-underline-offset: 4px;\">책장</a>\n      <a href=\"lines.html\">선</a>\n      <a href=\"colors.html\">색</a>\n      <a href=\"sound.html\">소리</a>\n      <a href=\"texts.html\">글</a>\n    </nav>\n  </header>\n\n  <section style=\"display: flex; flex-wrap: wrap; gap: 24px 48px; align-items: flex-end; max-width: 1360px;\">\n    <h2 style=\"margin: 0; flex: 0 0 auto; font-family: 'Chai Hwaljjak', 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif; font-size: 28px; line-height: 1.3; font-weight: 700; letter-spacing: -0.4px;\">열 권의 책</h2>\n    <p style=\"margin: 0; flex: 1 1 420px; max-width: 640px; font-size: 15px; line-height: 24px; color: #151613;\">열 명의 산책자가 원주 구도심 골목을 한 시간 동안 걸으며 선과 색과 소리를 주웠습니다. 책등에는 그 사람이 처음 적은 단어와, 1분 동안 녹음한 소리의 크기가 새겨져 있습니다.</p>\n  </section>\n\n  <section aria-label=\"참여자의 책\" style=\"display: flex; flex-direction: column; gap: 20px; max-width: 1360px; width: 100%;\">\n    <div style=\"overflow-x: auto; padding-top: 24px;\">\n      <div style=\"display: flex; align-items: flex-end; gap: 6px; width: max-content; margin: 0 auto; padding: 0 8px; border-bottom: 5px solid #151613;\">\n        <sc-for list=\"{{books}}\" as=\"b\" hint-placeholder-count=\"10\">\n          <a class=\"spine\" href=\"book.html#{{b.num}}\" aria-label=\"{{b.label}}\" onMouseEnter=\"{{b.enter}}\" onFocus=\"{{b.enter}}\" onMouseLeave=\"{{leave}}\" onBlur=\"{{leave}}\" style=\"{{b.style}}\">\n            <span style=\"font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.4px;\">{{b.num}}</span>\n            <span style=\"flex-grow: 1; display: flex; align-items: center; padding: 16px 0; writing-mode: vertical-rl; font-family: 'Noto Serif KR', 'Noto Serif CJK KR', serif; font-size: 24px; line-height: 1.2; letter-spacing: 2px;\">[처음 적은 단어]</span>\n            <span aria-hidden=\"true\" style=\"width: 100%; display: flex; flex-direction: column; gap: 2px;\">\n              <sc-for list=\"{{b.bars}}\" as=\"bar\" hint-placeholder-count=\"30\">\n                <span class=\"bar\" style=\"{{bar.style}}\"></span>\n              </sc-for>\n            </span>\n          </a>\n        </sc-for>\n      </div>\n    </div>\n    <p aria-live=\"polite\" style=\"margin: 0; text-align: center; min-height: 24px; font-size: 15px; line-height: 24px; color: #151613;\">{{caption}}</p>\n  </section>\n\n  <footer style=\"display: flex; flex-wrap: wrap; gap: 8px 32px; padding-top: 24px; border-top: 1px solid #e2e0da; font-size: 13px; line-height: 18px; color: #6b6c66; max-width: 1360px;\">\n    <span>선 민예원 · 색 조순호 · 소리 김수진 · 글 이성미</span>\n    <span>주최 한국예술인복지재단 · 주관 바름책방 · 2026 예술로 협업사업</span>\n  </footer>\n</div>\n";
+const c = new Component({});
+
+const root = document.getElementById('root');
+c.__mount = () => {
+  const vals = c.renderVals();
+  const ae = document.activeElement; const fp = (ae && root.contains(ae)) ? __pathOf(ae, root) : null;
+  root.replaceChildren(__render(TPL, vals));
+  if (fp) { const t = __at(root, fp); if (t && t.focus) t.focus({ preventScroll: true }); }
+  
+};
+c.__mount();
+</script>
+</body>
+</html>
