@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>소리 · 열 명의 1분 — 도시 산책자의 N페이지</title>
+<link rel="icon" href="assets/icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&amp;display=swap">
+<style>
+@font-face{font-family:'Chai Hwaljjak';src:url(assets/fonts/ChaiHwaljjak-Bold.otf) format('opentype');font-weight:700;font-display:swap}
+@font-face{font-family:'SimKyungha';src:url(assets/fonts/SimKyungha.ttf) format('truetype');font-weight:400;font-display:swap}
+body{margin:0;background:#ffffff}
+a{color:#6b6c66;text-decoration:none}a:hover{color:#151613}
+.play{cursor:pointer}
+.play:hover,.play:focus-visible{outline:2px solid #151613;outline-offset:2px}
+</style>
+<style>
+body{word-break:keep-all}
+#root > *{max-width:1440px;margin-left:auto;margin-right:auto}
+@media (max-width:640px){
+  h1{font-size:30px !important;line-height:1.2 !important}
+  main > div:has(> div > button.win){gap:8px !important;width:100%}
+  main > div:has(> div > button.win) > span:last-child{display:none}
+  div:has(> button.win){gap:5px !important;flex:1;min-width:0}
+  button.win{width:auto !important;flex:1;min-width:0;height:56px !important}
+  footer p{font-size:22px !important}
+  main > div:has(> div > button.chip){grid-template-columns:1fr !important;gap:8px !important}
+  main > div:has(> div > button.chip) > span{padding-top:0 !important}
+  button.chip{padding:8px 12px !important;font-size:14px !important;min-height:44px}
+  footer > div > div:nth-child(2){flex-direction:column;gap:2px !important}
+  footer > div > div:nth-child(2) > span{flex:none !important;white-space:normal !important}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+
+class DCLogic {
+  constructor(p){ this.props = p || {}; this.state = {}; }
+  setState(s){ let ch=false; for (const k in s){ if (this.state[k] !== s[k]) ch=true; } Object.assign(this.state, s); if (ch && this.__mount) this.__mount(); }
+  forceUpdate(){ if (this.__mount) this.__mount(); }
+}
+function __render(tplHtml, vals) {
+  const tpl = document.createElement('template'); tpl.innerHTML = tplHtml;
+  const look = (p, scope) => {
+    p = p.trim(); if (p === 'true') return true; if (p === 'false') return false;
+    const segs = p.split('.'); let v = (segs[0] in scope) ? scope[segs[0]] : vals[segs[0]];
+    for (const s of segs.slice(1)) v = v == null ? undefined : v[s]; return v;
+  };
+  const interp = (str, scope) => str.replace(/\{\{([^}]+)\}\}/g, (_, p) => { const v = look(p, scope); return v == null ? '' : String(v); });
+  const walk = (node, scope, out) => {
+    for (const n of Array.from(node.childNodes)) {
+      if (n.nodeType === 3) { out.appendChild(document.createTextNode(interp(n.textContent, scope))); continue; }
+      if (n.nodeType !== 1) continue;
+      const tag = n.tagName.toLowerCase();
+      if (tag === 'sc-for') {
+        const list = look(n.getAttribute('list').replace(/[{}]/g, ''), scope) || []; const as = n.getAttribute('as');
+        list.forEach((it, i) => walk(n.content || n, Object.assign({}, scope, { [as]: it, $index: i }), out)); continue;
+      }
+      if (tag === 'sc-if') { if (look(n.getAttribute('value').replace(/[{}]/g, ''), scope)) walk(n, scope, out); continue; }
+      const el = n.cloneNode(false);
+      for (const a of Array.from(n.attributes)) {
+        if (!a.value.includes('{{')) continue;
+        const whole = a.value.match(/^\{\{([^}]+)\}\}$/);
+        if (a.name.startsWith('on')) {
+          el.removeAttribute(a.name);
+          const fn = whole ? look(whole[1], scope) : null;
+          if (typeof fn === 'function') el.addEventListener(a.name.slice(2).toLowerCase(), fn);
+          continue;
+        }
+        if (whole) { const v = look(whole[1], scope); if (v === false || v == null) { el.removeAttribute(a.name); continue; } if (v === true) { el.setAttribute(a.name, ''); continue; } }
+        el.setAttribute(a.name, interp(a.value, scope));
+      }
+      walk(n, scope, el); out.appendChild(el);
+    }
+  };
+  const frag = document.createDocumentFragment(); walk(tpl.content, {}, frag); return frag;
+}
+function __pathOf(el, root){ const p=[]; while (el && el !== root){ const par=el.parentNode; if(!par) return null; p.unshift(Array.prototype.indexOf.call(par.children, el)); el=par; } return el===root ? p : null; }
+function __at(root, p){ let el=root; for (const i of p){ el = el && el.children[i]; } return el; }
+
+
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { playingIdx: null }; }
+  renderVals() {
+    const pad = (n) => String(n).padStart(2, '0');
+    const ROLES = [
+      { name: '등장', color: '#4d6987' },
+      { name: '사건', color: '#b5501f' },
+      { name: '여운', color: '#76629a' }
+    ];
+    const EX = {};
+    const cur = this.state.playingIdx;
+    const people = Array.from({ length: 10 }, (_, i) => {
+      const ex = EX[i];
+      const s = ex ? ex.s : 14 + ((i * 5 + 3) % 18);
+      const y = ex ? ex.y : s + 10 + ((i * 7 + 4) % 12);
+      const on = cur === i;
+      return {
+        num: pad(i + 1),
+        label: '참여자 ' + pad(i + 1) + '의 1분',
+        s: ex ? '0:' + s : '(　)',
+        y: ex ? '0:' + y : '(　)',
+        f0: s, f1: y - s, f2: 60 - y,
+        playing: on, paused: !on,
+        playLabel: on ? '참여자 ' + pad(i + 1) + '의 1분 멈춤' : '참여자 ' + pad(i + 1) + '의 1분 듣기',
+        toggle: () => this.setState({ playingIdx: on ? null : i }),
+        parts: ROLES.map((R, r) => ({
+          name: R.name, color: R.color,
+          line: ex ? ex.lines[r] : '[' + R.name + ' 문장]',
+          lineStyle: "margin: 0; font-family: 'SimKyungha', 'Noto Sans KR', sans-serif; font-size: 20px; line-height: 1.6; color: " + (ex ? '#151613' : '#6b6c66') + ';'
+        }))
+      };
+    });
+    return { people };
+  }
+}
+
+const TPL = "\n\n<div style=\"min-height: 1400px; max-width: 1440px; margin: 0 auto; box-sizing: border-box; background: #ffffff; color: #151613; font-family: 'Noto Sans KR', 'Noto Sans CJK KR', system-ui, sans-serif; padding: 24px 40px 64px; display: flex; flex-direction: column; gap: 48px; word-break: keep-all;\">\n\n  <header style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px;\">\n    <div style=\"display: flex; flex-direction: column; gap: 4px;\">\n      <a href=\"./\" style=\"font-family: 'Chai Hwaljjak', 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif; font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -0.5px; color: #151613;\">도시 산책자의 N페이지</a>\n      <p style=\"margin: 0; font-size: 13px; line-height: 18px; font-weight: 500; color: #6b6c66;\">원주에서 문장 좀 줍겠습니다 · 2026. 11. 14.</p>\n    </div>\n    <nav aria-label=\"아카이브\" style=\"display: flex; flex-wrap: wrap; gap: 24px; font-size: 13px; font-weight: 500; padding-top: 10px;\">\n      <a href=\"./\">홈</a>\n      <a href=\"shelf.html\">책장</a>\n      <a href=\"lines.html\">선</a>\n      <a href=\"colors.html\">색</a>\n      <a href=\"sound.html\" aria-current=\"page\" style=\"color: #151613; text-decoration: underline; text-underline-offset: 4px;\">소리</a>\n      <a href=\"texts.html\">글</a>\n    </nav>\n  </header>\n\n  <section aria-labelledby=\"h-arch\" style=\"display: flex; flex-direction: column; gap: 24px;\">\n    <div style=\"display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 24px;\">\n      <h1 id=\"h-arch\" style=\"margin: 0; font-family: 'Chai Hwaljjak', 'Noto Sans KR', sans-serif; font-size: 28px; line-height: 1.3; font-weight: 700;\">소리</h1>\n      <nav aria-label=\"소리 보기 방식\" style=\"display: flex; gap: 20px; font-size: 15px; line-height: 22px; font-weight: 600;\">\n        <a href=\"sound.html\" style=\"padding: 10px 0; border-bottom: 2px solid transparent;\">이어 듣기</a>\n        <a href=\"sound-archive.html\" aria-current=\"page\" style=\"color: #151613; padding: 10px 0; border-bottom: 2px solid #151613;\">열 명의 1분</a>\n      </nav>\n      <p style=\"margin: 0; font-size: 15px; line-height: 24px; color: #6b6c66;\">한 자리에서 녹음한 1분과, 그 1분을 등장 · 사건 · 여운으로 나눠 쓴 이야기. 서사 · 담당 작가 김수진</p>\n    </div>\n    <ol style=\"margin: 0; padding: 20px 0 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px 32px; border-top: 1px solid #e2e0da;\">\n      <li style=\"display: flex; gap: 10px; font-size: 13px; line-height: 20px; color: #4a4b46;\"><span style=\"font-weight: 700; color: #151613;\">1</span><span>마음 가는 자리 한 곳에서 1~3분 녹음했습니다.</span></li>\n      <li style=\"display: flex; gap: 10px; font-size: 13px; line-height: 20px; color: #4a4b46;\"><span style=\"font-weight: 700; color: #151613;\">2</span><span>소리가 바뀐 순간(사건)을 찾고, 그 순간이 담긴 1분을 골랐습니다.</span></li>\n      <li style=\"display: flex; gap: 10px; font-size: 13px; line-height: 20px; color: #4a4b46;\"><span style=\"font-weight: 700; color: #151613;\">3</span><span>1분을 등장 · 사건 · 여운으로 나눠 자신만의 서사로 이야기를 만들었습니다.</span></li>\n    </ol>\n  </section>\n\n  <section aria-label=\"참여자들의 1분\" style=\"display: grid; grid-template-columns: repeat(auto-fill, minmax(min(520px, 100%), 1fr)); gap: 56px 48px;\">\n    <sc-for list=\"{{people}}\" as=\"p\" hint-placeholder-count=\"10\">\n      <article aria-label=\"{{p.label}}\" style=\"display: flex; flex-direction: column; gap: 18px; padding-top: 20px; border-top: 1px solid #151613;\">\n        <div style=\"display: flex; align-items: center; gap: 16px;\">\n          <button class=\"play\" type=\"button\" aria-label=\"{{p.playLabel}}\" onClick=\"{{p.toggle}}\" style=\"width: 44px; height: 44px; border-radius: 50%; border: none; background: #151613; color: #ffffff; flex-shrink: 0; display: flex; align-items: center; justify-content: center;\">\n            <sc-if value=\"{{p.playing}}\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M7 5h3.5v14H7zM13.5 5H17v14h-3.5z\" fill=\"currentColor\"></path></svg></sc-if>\n            <sc-if value=\"{{p.paused}}\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M8 5l11 7-11 7z\" fill=\"currentColor\"></path></svg></sc-if>\n          </button>\n          <div style=\"flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0;\">\n            <div style=\"display: flex; height: 10px; gap: 3px;\">\n              <span style=\"flex: {{p.f0}}; background: #4d6987;\"></span>\n              <span style=\"flex: {{p.f1}}; background: #b5501f;\"></span>\n              <span style=\"flex: {{p.f2}}; background: #76629a;\"></span>\n            </div>\n            <div style=\"display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; font-weight: 500; color: #6b6c66;\">\n              <span>0:00</span><span>사건 {{p.s}}</span><span>여운 {{p.y}}</span><span>1:00</span>\n            </div>\n          </div>\n        </div>\n        <sc-for list=\"{{p.parts}}\" as=\"t\" hint-placeholder-count=\"3\">\n          <div style=\"display: flex; flex-direction: column; gap: 4px;\">\n            <p style=\"margin: 0; font-size: 12px; line-height: 18px; font-weight: 600; color: {{t.color}};\">{{t.name}}</p>\n            <p style=\"{{t.lineStyle}}\">{{t.line}}</p>\n          </div>\n        </sc-for>\n        <div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding-top: 12px; border-top: 1px solid #e2e0da; font-size: 12px; line-height: 18px; color: #6b6c66;\">\n          <span>참여자 {{p.num}} · [참여자 이름] · [녹음한 자리]</span>\n          <a href=\"book.html#{{p.num}}\" style=\"padding: 12px 0; font-weight: 600; color: #151613;\">책 펼치기 →</a>\n        </div>\n      </article>\n    </sc-for>\n  </section>\n\n  <nav aria-label=\"이어서 보기\" style=\"display: flex; justify-content: space-between; padding-top: 24px; border-top: 1px solid #e2e0da; font-size: 13px; font-weight: 500;\">\n    <a href=\"sound.html\" style=\"padding: 12px 0;\">← 이어 듣기</a>\n    <a href=\"texts.html\" style=\"padding: 12px 0;\">글 →</a>\n  </nav>\n</div>\n";
+const c = new Component({});
+
+const root = document.getElementById('root');
+c.__mount = () => {
+  const vals = c.renderVals();
+  const ae = document.activeElement; const fp = (ae && root.contains(ae)) ? __pathOf(ae, root) : null;
+  root.replaceChildren(__render(TPL, vals));
+  if (fp) { const t = __at(root, fp); if (t && t.focus) t.focus({ preventScroll: true }); }
+  
+};
+c.__mount();
+</script>
+</body>
+</html>
